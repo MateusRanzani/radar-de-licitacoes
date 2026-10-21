@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import type { Metadata } from "next"
+import { connection } from "next/server"
 import {
   buscarContratacao, buscarItens, buscarArquivos,
   parseContratacaoId,
@@ -35,6 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function DetalheLicitacaoPage({ params }: Props) {
+  await connection() // datas relativas → rendering dinâmico
   const { id } = await params
   const parsed = parseContratacaoId(id)
   if (!parsed) notFound()
@@ -261,7 +263,7 @@ export default async function DetalheLicitacaoPage({ params }: Props) {
             <dl className="flex flex-col gap-2 text-sm">
               <Campo label="Fonte"           valor="PNCP (Portal Nacional de Contratações Públicas)" />
               <Campo label="Sistema disputa" valor={c.usuarioNome} />
-              <Campo label="Dados de"        valor={`consulta ao vivo em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`} />
+              <Campo label="Dados de"        valor={`consulta ao vivo — ${formatarDataHora(new Date().toISOString())}`} />
             </dl>
             {c.linkSistemaOrigem && (
               <a

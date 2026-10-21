@@ -140,7 +140,7 @@ export function CardLicitacao({ licitacao: l, compacto = false }: CardLicitacaoP
 
         {/* Metadados de origem — sempre visível */}
         <p className="mt-2 text-[11px]" style={{ color: "var(--text-light)" }}>
-          Fonte: PNCP · {l.numeroControlePNCP} · Consulta ao vivo
+          Fonte: PNCP · {l.numeroControlePNCP} · consulta ao vivo
         </p>
       </div>
     </article>

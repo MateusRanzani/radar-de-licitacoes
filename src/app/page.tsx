@@ -108,7 +108,7 @@ export default function HomePage() {
 
         {/* Aviso de cobertura */}
         <p className="mt-8 text-center text-[13px]" style={{ color: "var(--text-light)" }}>
-          Dados ao vivo do PNCP (Portal Nacional de Contratações Públicas) · sem banco de dados ainda (Etapa 0)
+          Dados ao vivo do PNCP (Portal Nacional de Contratações Públicas) · banco de dados em configuração (Etapa 1)
         </p>
       </section>
     </div>

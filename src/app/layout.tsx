@@ -1,8 +1,10 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
+import { Suspense } from "react"
 import "./globals.css"
 import { TopNav } from "@/components/layout/TopNav"
 import { Sidebar } from "@/components/layout/Sidebar"
+import { UserMenuServer } from "@/components/layout/UserMenuServer"
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] })
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] })
@@ -20,7 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         className="flex flex-col h-full"
         style={{ background: "var(--canvas)" }}
       >
-        <TopNav />
+        <TopNav userMenu={<Suspense><UserMenuServer /></Suspense>} />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main

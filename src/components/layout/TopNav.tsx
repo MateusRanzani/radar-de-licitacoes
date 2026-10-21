@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState, Suspense } from "react"
+import { useState, Suspense, type ReactNode } from "react"
 import { Menu, X } from "lucide-react"
 
 const NAVLINKS = [
@@ -64,7 +64,7 @@ function NavLinksFallback({ mobile }: { mobile?: boolean }) {
 }
 
 // ─── Shell do TopNav (não precisa de pathname) ────────────────────────────── //
-export function TopNav() {
+export function TopNav({ userMenu }: { userMenu?: ReactNode }) {
   const [aberto, setAberto] = useState(false)
 
   return (
@@ -95,9 +95,14 @@ export function TopNav() {
         </Suspense>
       </nav>
 
+      {/* User menu (server-rendered slot) */}
+      <div className="hidden md:flex ml-auto items-center">
+        {userMenu}
+      </div>
+
       {/* Botão mobile */}
       <button
-        className="ml-auto flex md:hidden h-9 w-9 items-center justify-center rounded-full"
+        className="flex md:hidden ml-auto h-9 w-9 items-center justify-center rounded-full"
         style={{ background: "rgb(16 24 40 / 0.06)", color: "var(--navy)" }}
         onClick={() => setAberto((v) => !v)}
         aria-label={aberto ? "Fechar menu" : "Abrir menu"}
