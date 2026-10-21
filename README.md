@@ -1,4 +1,4 @@
-# LicitaRadar
+# Radar de licitações
 
 Plataforma para pesquisar e monitorar licitações públicas brasileiras — pregões, dispensas, concorrências e outros processos publicados nos portais oficiais.
 
