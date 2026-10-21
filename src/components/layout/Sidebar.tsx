@@ -3,11 +3,12 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Suspense } from "react"
-import { LayoutDashboard, Search, BookmarkCheck, Settings } from "lucide-react"
+import { LayoutDashboard, Search, BookmarkCheck, Settings, Calculator } from "lucide-react"
 
 const ITEMS = [
   { href: "/painel",         icon: LayoutDashboard, label: "Painel" },
   { href: "/licitacoes",     icon: Search,          label: "Buscar" },
+  { href: "/cotacao",        icon: Calculator,      label: "Cotação" },
   { href: "/acompanhamento", icon: BookmarkCheck,   label: "Acompanhamento" },
   { href: "/admin",          icon: Settings,        label: "Admin" },
 ]

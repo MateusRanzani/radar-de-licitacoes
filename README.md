@@ -17,7 +17,7 @@ Plataforma para pesquisar e monitorar licitações públicas brasileiras — pre
 |--------|-----|------|
 | **PNCP** — Portal Nacional de Contratações Públicas | Busca por palavra no portal (`/api/search/`) — chamada do navegador, CORS liberado, nada armazenado | Não oficial |
 | **PNCP** — `/v1/contratacoes/proposta` | Lista de editais ao vivo e sincronização periódica para o banco local | Oficial |
-| **PNCP** — `/v1/contratacoes/{cnpj}/{ano}/{seq}/itens` e `.../arquivos` | Itens e documentos na página de detalhe, consultados sob demanda | Oficial |
+| **PNCP** — `/v1/orgaos/{cnpj}/compras/{ano}/{seq}/itens` e `.../arquivos` | Itens e documentos na página de detalhe, consultados sob demanda | Oficial |
 
 A busca por palavra roda diretamente do seu navegador — o servidor do PNCP bloqueia chamadas fora de navegador com frequência, por isso a chamada é feita do lado do cliente. Nenhum resultado de busca é armazenado.
 

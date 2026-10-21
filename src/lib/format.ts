@@ -28,8 +28,9 @@ const fmtHora      = new Intl.DateTimeFormat(LOCALE, { timeZone: TZ, hour: "2-di
 /** "2026-10-19T00:01:02" → Date interpretada como Brasília */
 export function parsePncpDate(s: string | null | undefined): Date | null {
   if (!s) return null
-  // "2026-10-19T00:01:02" — sem fuso, tratamos como -03:00
-  const cleaned = s.endsWith("Z") || s.includes("+") ? s : `${s}-03:00`
+  // "2026-10-19T00:01:02" — sem fuso, tratamos como -03:00; "2026-10-19" (só data) vira meia-noite em Brasília
+  const comHora = /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00` : s
+  const cleaned = comHora.endsWith("Z") || comHora.includes("+") ? comHora : `${comHora}-03:00`
   const d = new Date(cleaned)
   return isNaN(d.getTime()) ? null : d
 }

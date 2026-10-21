@@ -17,6 +17,7 @@
     "sync:pncp": "dotenv run -f .env.local -- tsx src/scripts/sync-pncp.ts"
   },
   "dependencies": {
+    "@svg-maps/brazil": "^2.0.0",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.4",

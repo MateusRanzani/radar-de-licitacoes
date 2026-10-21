@@ -1,0 +1,16 @@
+import { chromium } from "playwright"
+const page = await (await chromium.launch({ headless: true })).newPage()
+page.on("console", m => { if (m.type() === "error") console.log("[err]", m.text().slice(0, 200)) })
+const r = await page.goto("http://localhost:3000/cotacao", { waitUntil: "domcontentloaded" })
+console.log("HTTP", r?.status())
+await page.waitForSelector("input[aria-label='Produto para cotar']", { timeout: 8000 })
+console.log("Campo de busca presente ✓")
+const titulo = await page.locator("h1").textContent()
+console.log("Título:", titulo)
+const botao = await page.locator("button[type=submit]").textContent()
+console.log("Botão:", botao?.trim())
+// Link na sidebar
+const link = page.locator("a[href='/cotacao']")
+console.log("Link sidebar:", await link.count() > 0 ? "✓" : "✗ não encontrado")
+await page.close()
+console.log("✅ Página de cotação OK")

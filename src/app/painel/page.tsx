@@ -1,4 +1,5 @@
 import { connection } from "next/server"
+import { Suspense } from "react"
 import type { Metadata } from "next"
 import { db } from "@/db"
 import {
@@ -12,7 +13,46 @@ import { BarChart2, TrendingUp, Clock, Building2 } from "lucide-react"
 
 export const metadata: Metadata = { title: "Painel BI" }
 
-export default async function PainelPage() {
+export default function PainelPage() {
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6 w-full space-y-8">
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-xl"
+          style={{ background: "rgb(255 90 31 / 0.10)", color: "var(--brand)" }}
+        >
+          <BarChart2 size={20} />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold" style={{ color: "var(--navy)" }}>Painel BI</h1>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Análise do banco local</p>
+        </div>
+      </div>
+
+      <Suspense fallback={<PainelCarregando />}>
+        <PainelDados />
+      </Suspense>
+    </div>
+  )
+}
+
+function PainelCarregando() {
+  return (
+    <div className="space-y-6" aria-busy="true" aria-label="Carregando painel">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-2xl animate-pulse" style={{ background: "var(--border)" }} />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="h-64 rounded-2xl animate-pulse" style={{ background: "var(--border)" }} />
+        <div className="h-64 rounded-2xl animate-pulse" style={{ background: "var(--border)" }} />
+      </div>
+    </div>
+  )
+}
+
+async function PainelDados() {
   await connection()
 
   const [
@@ -96,22 +136,10 @@ export default async function PainelPage() {
   const ESFERA: Record<string, string> = { F: "Federal", E: "Estadual", M: "Municipal", D: "Distrital" }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 w-full space-y-8">
-      {/* Cabeçalho */}
-      <div className="flex items-center gap-3">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl"
-          style={{ background: "rgb(255 90 31 / 0.10)", color: "var(--brand)" }}
-        >
-          <BarChart2 size={20} />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold" style={{ color: "var(--navy)" }}>Painel BI</h1>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Análise do banco local · {totalNum.toLocaleString("pt-BR")} contratações indexadas
-          </p>
-        </div>
-      </div>
+    <>
+      <p className="text-sm -mt-5" style={{ color: "var(--text-muted)" }}>
+        {totalNum.toLocaleString("pt-BR")} contratações indexadas
+      </p>
 
       {totalNum === 0 && (
         <div
@@ -263,7 +291,7 @@ export default async function PainelPage() {
           </Secao>
         </>
       )}
-    </div>
+    </>
   )
 }
 
@@ -272,7 +300,7 @@ function KpiCard({ label, valor, icon, destaque }: {
 }) {
   return (
     <div
-      className="glass rounded-2xl p-4 flex flex-col gap-2"
+      className="glass rounded-2xl p-4 flex flex-col gap-2 min-w-0"
       style={{ border: "1px solid var(--border-glass)" }}
     >
       <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
@@ -280,7 +308,7 @@ function KpiCard({ label, valor, icon, destaque }: {
         {label}
       </div>
       <p
-        className="text-2xl font-semibold tabular-nums leading-tight"
+        className={`${valor.length > 12 ? "text-lg" : "text-2xl"} font-semibold tabular-nums leading-tight`}
         style={{ color: destaque ? "var(--brand)" : "var(--navy)" }}
       >
         {valor}
