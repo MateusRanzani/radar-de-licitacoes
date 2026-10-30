@@ -70,9 +70,63 @@ function deriveStatus(item: PncpContratacao): string {
   return "indeterminada"
 }
 
-// ─── Retry com backoff ────────────────────────────────────────────────────── //
+// ─── Disjuntor (circuit breaker) ─────────────────────────────────────────── //
+// Evita martelos no PNCP quando o serviço está instável.
+// Estado: fechado → aberto (após N falhas) → semiaberto (após cooldown) → fechado
+
+const FALHAS_PARA_ABRIR  = 5
+const COOLDOWN_MS        = 60_000  // 60 s antes de tentar de novo
+
+class DisjuntorPncp {
+  private estado: "fechado" | "aberto" | "semiaberto" = "fechado"
+  private falhasConsecutivas = 0
+  private abertoEm: number | null = null
+
+  podeRequisitar(): boolean {
+    if (this.estado === "fechado") return true
+    if (this.estado === "aberto") {
+      if (this.abertoEm !== null && Date.now() - this.abertoEm > COOLDOWN_MS) {
+        this.estado = "semiaberto"
+        return true  // 1 tentativa de teste
+      }
+      return false
+    }
+    return true  // semiaberto: passa 1 requisição
+  }
+
+  registrarSucesso(): void {
+    this.estado = "fechado"
+    this.falhasConsecutivas = 0
+    this.abertoEm = null
+  }
+
+  registrarFalha(): void {
+    this.falhasConsecutivas++
+    if (this.estado === "semiaberto" || this.falhasConsecutivas >= FALHAS_PARA_ABRIR) {
+      this.estado = "aberto"
+      this.abertoEm = Date.now()
+      this.falhasConsecutivas = 0
+    }
+  }
+
+  get statusTexto(): string {
+    if (this.estado === "aberto") {
+      const restante = Math.ceil(((this.abertoEm ?? 0) + COOLDOWN_MS - Date.now()) / 1_000)
+      return `aberto (reabrir em ${Math.max(0, restante)}s)`
+    }
+    return this.estado
+  }
+}
+
+const disjuntor = new DisjuntorPncp()
+
+// ─── Retry com backoff + disjuntor ───────────────────────────────────────── //
 
 async function fetchComRetry(url: string, tentativas = 3): Promise<PncpPaginado> {
+  if (!disjuntor.podeRequisitar()) {
+    throw new Error(`Disjuntor PNCP ${disjuntor.statusTexto} — aguarde o cooldown`)
+  }
+
   let ultimo: Error | null = null
   for (let i = 0; i < tentativas; i++) {
     try {
@@ -84,12 +138,14 @@ async function fetchComRetry(url: string, tentativas = 3): Promise<PncpPaginado>
         continue
       }
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`)
+      disjuntor.registrarSucesso()
       return r.json() as Promise<PncpPaginado>
     } catch (e) {
       ultimo = e as Error
       if (i < tentativas - 1) await new Promise(res => setTimeout(res, 2 ** i * 1_000))
     }
   }
+  disjuntor.registrarFalha()
   throw ultimo ?? new Error("fetch falhou")
 }
 

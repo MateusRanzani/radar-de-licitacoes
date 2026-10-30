@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { User, LogOut, LogIn } from "lucide-react"
+import { User, LogOut, LogIn, Settings } from "lucide-react"
 import { logoutAction } from "@/app/actions/auth"
 
 interface Props {
@@ -75,6 +75,15 @@ export function UserMenuClient({ usuario }: Props) {
               onClick={() => setAberto(false)}
             >
               Acompanhamento
+            </Link>
+            <Link
+              href="/perfil"
+              className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"
+              style={{ color: "var(--navy)" }}
+              onClick={() => setAberto(false)}
+            >
+              <Settings size={14} />
+              Perfil e órgão
             </Link>
             <form
               action={logoutAction}

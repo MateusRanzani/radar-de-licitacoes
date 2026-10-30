@@ -3,15 +3,88 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import { db } from "@/db"
 import {
-  contratacoes, orgaos, unidadesOrgao, modalidades,
+  contratacoes, orgaos, unidadesOrgao, modalidades, usuarios,
 } from "@/db/schema"
 import {
   eq, sql, count, sum, desc, isNotNull,
 } from "drizzle-orm"
 import { formatarMoeda } from "@/lib/format"
 import { BarChart2, TrendingUp, Clock, Building2 } from "lucide-react"
+import { auth } from "@/auth"
+import { ContratosVencendo } from "@/components/painel/ContratosVencendo"
+import { RadarFracionamento } from "@/components/painel/RadarFracionamento"
 
 export const metadata: Metadata = { title: "Painel BI" }
+
+// ─── Queries extraídas para tipagem correta no try-catch ─────────────────── //
+
+function buscarKpis() {
+  return db.select({
+    total:        count(),
+    totalAbertos: sql<number>`count(*) filter (where ${contratacoes.statusDerivado} = 'aberta_confirmada')`,
+    valorTotal:   sum(contratacoes.valorEstimado),
+    valorAbertos: sql<string>`sum(${contratacoes.valorEstimado}) filter (where ${contratacoes.statusDerivado} = 'aberta_confirmada')`,
+  }).from(contratacoes)
+}
+
+function buscarModalidades() {
+  return db.select({
+    nome:  modalidades.nome,
+    total: count(),
+    valor: sum(contratacoes.valorEstimado),
+  })
+    .from(contratacoes)
+    .leftJoin(modalidades, eq(contratacoes.modalidadeId, modalidades.id))
+    .groupBy(modalidades.nome)
+    .orderBy(desc(count()))
+    .limit(10)
+}
+
+function buscarUfs() {
+  return db.select({
+    uf:    unidadesOrgao.ufSigla,
+    total: count(),
+    valor: sum(contratacoes.valorEstimado),
+  })
+    .from(contratacoes)
+    .innerJoin(unidadesOrgao, eq(contratacoes.unidadeOrgaoId, unidadesOrgao.id))
+    .where(isNotNull(unidadesOrgao.ufSigla))
+    .groupBy(unidadesOrgao.ufSigla)
+    .orderBy(desc(count()))
+    .limit(15)
+}
+
+function buscarEsferas() {
+  return db.select({
+    esfera: orgaos.esfera,
+    total:  count(),
+    valor:  sum(contratacoes.valorEstimado),
+  })
+    .from(contratacoes)
+    .innerJoin(orgaos, eq(contratacoes.orgaoId, orgaos.id))
+    .groupBy(orgaos.esfera)
+    .orderBy(desc(count()))
+}
+
+function buscarRecentes() {
+  return db.select({
+    objeto:             contratacoes.objeto,
+    valorEstimado:      contratacoes.valorEstimado,
+    orcamentoSigiloso:  contratacoes.orcamentoSigiloso,
+    dataPublicacaoPncp: contratacoes.dataPublicacaoPncp,
+    orgaoNome:          orgaos.razaoSocial,
+    unidadeUf:          unidadesOrgao.ufSigla,
+    modalidadeNome:     modalidades.nome,
+  })
+    .from(contratacoes)
+    .innerJoin(orgaos, eq(contratacoes.orgaoId, orgaos.id))
+    .innerJoin(unidadesOrgao, eq(contratacoes.unidadeOrgaoId, unidadesOrgao.id))
+    .leftJoin(modalidades, eq(contratacoes.modalidadeId, modalidades.id))
+    .orderBy(desc(contratacoes.coletadoEm))
+    .limit(5)
+}
+
+// ─── Página ──────────────────────────────────────────────────────────────── //
 
 export default function PainelPage() {
   return (
@@ -31,6 +104,14 @@ export default function PainelPage() {
 
       <Suspense fallback={<PainelCarregando />}>
         <PainelDados />
+      </Suspense>
+
+      <Suspense fallback={<div className="h-32 rounded-2xl animate-pulse" style={{ background: "var(--border)" }} />}>
+        <RadarFracionamento />
+      </Suspense>
+
+      <Suspense fallback={<div className="h-32 rounded-2xl animate-pulse" style={{ background: "var(--border)" }} />}>
+        <PainelContratosVencendo />
       </Suspense>
     </div>
   )
@@ -55,78 +136,43 @@ function PainelCarregando() {
 async function PainelDados() {
   await connection()
 
-  const [
-    kpis,
-    porModalidade,
-    porUf,
-    porEsfera,
-    recentes,
-  ] = await Promise.all([
-    // KPIs gerais
-    db.select({
-      total:         count(),
-      totalAbertos:  sql<number>`count(*) filter (where ${contratacoes.statusDerivado} = 'aberta_confirmada')`,
-      valorTotal:    sum(contratacoes.valorEstimado),
-      valorAbertos:  sql<string>`sum(${contratacoes.valorEstimado}) filter (where ${contratacoes.statusDerivado} = 'aberta_confirmada')`,
-    }).from(contratacoes),
+  let kpis:          Awaited<ReturnType<typeof buscarKpis>>        = []
+  let porModalidade: Awaited<ReturnType<typeof buscarModalidades>>  = []
+  let porUf:         Awaited<ReturnType<typeof buscarUfs>>          = []
+  let porEsfera:     Awaited<ReturnType<typeof buscarEsferas>>      = []
+  let recentes:      Awaited<ReturnType<typeof buscarRecentes>>     = []
+  let erroBanco = false
 
-    // Distribuição por modalidade
-    db.select({
-      nome:  modalidades.nome,
-      total: count(),
-      valor: sum(contratacoes.valorEstimado),
-    })
-      .from(contratacoes)
-      .leftJoin(modalidades, eq(contratacoes.modalidadeId, modalidades.id))
-      .groupBy(modalidades.nome)
-      .orderBy(desc(count()))
-      .limit(10),
+  try {
+    ;[kpis, porModalidade, porUf, porEsfera, recentes] = await Promise.all([
+      buscarKpis(),
+      buscarModalidades(),
+      buscarUfs(),
+      buscarEsferas(),
+      buscarRecentes(),
+    ])
+  } catch {
+    erroBanco = true
+  }
 
-    // Distribuição por UF
-    db.select({
-      uf:    unidadesOrgao.ufSigla,
-      total: count(),
-      valor: sum(contratacoes.valorEstimado),
-    })
-      .from(contratacoes)
-      .innerJoin(unidadesOrgao, eq(contratacoes.unidadeOrgaoId, unidadesOrgao.id))
-      .where(isNotNull(unidadesOrgao.ufSigla))
-      .groupBy(unidadesOrgao.ufSigla)
-      .orderBy(desc(count()))
-      .limit(15),
-
-    // Distribuição por esfera
-    db.select({
-      esfera: orgaos.esfera,
-      total:  count(),
-      valor:  sum(contratacoes.valorEstimado),
-    })
-      .from(contratacoes)
-      .innerJoin(orgaos, eq(contratacoes.orgaoId, orgaos.id))
-      .groupBy(orgaos.esfera)
-      .orderBy(desc(count())),
-
-    // 5 mais recentes
-    db.select({
-      objeto:           contratacoes.objeto,
-      valorEstimado:    contratacoes.valorEstimado,
-      orcamentoSigiloso: contratacoes.orcamentoSigiloso,
-      dataPublicacaoPncp: contratacoes.dataPublicacaoPncp,
-      orgaoNome:        orgaos.razaoSocial,
-      unidadeUf:        unidadesOrgao.ufSigla,
-      modalidadeNome:   modalidades.nome,
-    })
-      .from(contratacoes)
-      .innerJoin(orgaos, eq(contratacoes.orgaoId, orgaos.id))
-      .innerJoin(unidadesOrgao, eq(contratacoes.unidadeOrgaoId, unidadesOrgao.id))
-      .leftJoin(modalidades, eq(contratacoes.modalidadeId, modalidades.id))
-      .orderBy(desc(contratacoes.coletadoEm))
-      .limit(5),
-  ])
+  if (erroBanco) {
+    return (
+      <div
+        className="rounded-2xl border p-8 text-center"
+        style={{ borderColor: "var(--border)" }}
+      >
+        <p className="font-medium" style={{ color: "var(--navy)" }}>Banco de dados indisponível</p>
+        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+          Verifique se o banco local está rodando:{" "}
+          <code className="font-mono text-xs">docker compose up -d postgres</code>
+        </p>
+      </div>
+    )
+  }
 
   const k = kpis[0]
-  const totalNum    = k?.total    as unknown as number ?? 0
-  const abertosNum  = k?.totalAbertos as number ?? 0
+  const totalNum    = (k?.total    as unknown as number) ?? 0
+  const abertosNum  = (k?.totalAbertos as number) ?? 0
   const valorTotal  = k?.valorTotal  ? parseFloat(k.valorTotal as string) : null
   const valorAbertos = k?.valorAbertos ? parseFloat(k.valorAbertos as string) : null
 
@@ -292,6 +338,25 @@ async function PainelDados() {
         </>
       )}
     </>
+  )
+}
+
+async function PainelContratosVencendo() {
+  await connection()
+  const session = await auth()
+  if (!session?.user?.id) return null
+
+  const [user] = await db
+    .select({ cnpjOrgao: usuarios.cnpjOrgao, nomeOrgao: usuarios.nomeOrgao })
+    .from(usuarios)
+    .where(eq(usuarios.id, session.user.id))
+    .limit(1)
+
+  return (
+    <ContratosVencendo
+      cnpjOrgao={user?.cnpjOrgao ?? null}
+      nomeOrgao={user?.nomeOrgao ?? null}
+    />
   )
 }
 

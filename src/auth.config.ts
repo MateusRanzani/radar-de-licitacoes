@@ -10,7 +10,7 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const logado = !!auth?.user
-      const rotasProtegidas = ["/acompanhamento", "/painel"]
+      const rotasProtegidas = ["/acompanhamento", "/painel", "/perfil"]
       const ehProtegida = rotasProtegidas.some((p) => nextUrl.pathname.startsWith(p))
       if (ehProtegida) return logado
       return true

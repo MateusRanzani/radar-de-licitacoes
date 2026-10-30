@@ -13,6 +13,9 @@ export const usuarios = authSchema.table("usuarios", {
   imagem:         text("imagem"),
   senhaHash:      text("senha_hash"),   // argon2id, null para magic-link only
   papel:          text("papel").default("usuario").notNull(), // usuario|admin
+  cnpjOrgao:      text("cnpj_orgao"),
+  nomeOrgao:      text("nome_orgao"),
+  codigoIbgeMunicipio: text("codigo_ibge_municipio"),
   criadoEm:       timestamp("criado_em",    { withTimezone: true }).defaultNow().notNull(),
   atualizadoEm:   timestamp("atualizado_em", { withTimezone: true }).defaultNow().notNull(),
 })

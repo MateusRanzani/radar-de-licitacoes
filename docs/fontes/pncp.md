@@ -66,6 +66,32 @@ Cabeçalhos: `access-control-allow-origin: *` (o navegador pode chamar direto) e
 
 `numeroControlePNCP` (id externo estável, ex. `88201298000149-1-001203/2026`), `anoCompra`, `sequencialCompra`, `numeroCompra`, `processo`, `objetoCompra`, `informacaoComplementar`, `orgaoEntidade{cnpj,razaoSocial,esferaId,poderId}`, `unidadeOrgao{ufSigla,municipioNome,codigoIbge,codigoUnidade,nomeUnidade}`, `modalidadeId/Nome`, `modoDisputaId/Nome`, `tipoInstrumentoConvocatorioCodigo/Nome`, `amparoLegal`, `srp`, `valorTotalEstimado`, `valorTotalHomologado`, `indicadorOrcamentoSigiloso`, `situacaoCompraId/Nome`, `dataPublicacaoPncp`, `dataAberturaProposta`, `dataEncerramentoProposta`, `dataAtualizacao`, `dataAtualizacaoGlobal`, `linkSistemaOrigem`, `linkProcessoEletronico`, `existeResultado`, `fontesOrcamentarias`, `orgaoSubRogado`, `unidadeSubRogada`.
 
+## Endpoint `/v1/contratos` — contratos assinados
+
+Verificado por chamada real em 2026-10-24.
+
+`GET https://pncp.gov.br/api/consulta/v1/contratos`
+
+| Parâmetro | Obrigatório | Observação |
+|---|---|---|
+| `dataInicial` | sim | AAAAMMDD — filtra por `dataPublicacaoPncp` |
+| `dataFinal` | sim | AAAAMMDD — máximo 365 dias entre início/fim |
+| `cnpjOrgao` | não | 14 dígitos sem formatação |
+| `pagina` | sim | base 1 |
+| `tamanhoPagina` | não | máx 50 (default não testado; 5 retorna 400, 10 OK) |
+
+Semântica dos filtros: `dataInicial`/`dataFinal` filtram por `dataPublicacaoPncp`, não por `dataVigenciaFim`. Para encontrar contratos vencendo, é necessário paginar e filtrar localmente pelo campo `dataVigenciaFim`.
+
+### Campos do response (`RecuperarContratoDTO`)
+
+`numeroControlePNCP`, `anoContrato`, `sequencialContrato`, `orgaoEntidade{cnpj,razaoSocial,esferaId,poderId}`, `unidadeOrgao`, `objetoContrato`, `niFornecedor`, `nomeRazaoSocialFornecedor`, `tipoPessoa`, `valorInicial`, `valorParcela`, `valorGlobal`, `valorAcumulado`, `dataAssinatura`, `dataVigenciaInicio`, `dataVigenciaFim`, `dataPublicacaoPncp`, `dataAtualizacao`, `processo`, `numeroContratoEmpenho`, `numeroControlePncpCompra`, `numeroControlePncpAta`, `tipoContrato`, `categoriaProcesso`, `receita`, `numeroParcelas`, `temRemanejamento`, `frutoAdesao`, `emendaParlamentar`, `orgaoSubRogado`, `unidadeSubRogada`, `identificadorCipi`, `urlCipi`, `usuarioNome`.
+
+- `valorGlobal` em **reais** (não centavos), pode ser null.
+- Datas no formato `YYYY-MM-DD` (sem hora).
+- Volume: município médio ~1350 contratos/ano (tamanhoPagina=50 → ~27 páginas).
+
+Link público: `https://pncp.gov.br/app/contratos/{cnpj}/{anoContrato}/{sequencialContrato}` — **não confirmado, não usar** até verificação visual.
+
 ## Pontos de atenção
 
 - Datas vêm **sem fuso** (`2026-10-19T00:01:02`): tratadas como `America/Sao_Paulo`.

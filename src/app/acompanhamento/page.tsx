@@ -14,6 +14,8 @@ import { StatusBadge } from "@/components/ui/Badge"
 import { AnotacaoEditor } from "@/components/acompanhamento/AnotacaoEditor"
 import { StatusSelector } from "@/components/acompanhamento/StatusSelector"
 import { Star, Calendar, Building2, MapPin, ExternalLink } from "lucide-react"
+import { pesquisasSalvas } from "@/db/schema"
+import { PesquisasSalvas } from "@/components/acompanhamento/PesquisasSalvas"
 
 export const metadata: Metadata = { title: "Acompanhamento" }
 
@@ -56,13 +58,14 @@ export default async function AcompanhamentoPage() {
   // Anotações e status para esses favoritos
   const ids = favoritosComDados.map((f) => f.contratacaoId)
 
-  const [anotacoesMap, statusMap] = await Promise.all([
+  const [anotacoesMap, statusMap, pesquisas] = await Promise.all([
     ids.length > 0
       ? db.select().from(anotacoes).where(eq(anotacoes.userId, userId))
       : Promise.resolve([]),
     ids.length > 0
       ? db.select().from(statusPessoal).where(eq(statusPessoal.userId, userId))
       : Promise.resolve([]),
+    db.select().from(pesquisasSalvas).where(eq(pesquisasSalvas.userId, userId)).orderBy(desc(pesquisasSalvas.criadoEm)),
   ])
 
   const anotacaoPorId = Object.fromEntries(
@@ -196,6 +199,11 @@ export default async function AcompanhamentoPage() {
           })}
         </div>
       )}
+
+      {/* Pesquisas salvas */}
+      <div className="mt-8">
+        <PesquisasSalvas pesquisas={pesquisas as Parameters<typeof PesquisasSalvas>[0]["pesquisas"]} />
+      </div>
     </div>
   )
 }
