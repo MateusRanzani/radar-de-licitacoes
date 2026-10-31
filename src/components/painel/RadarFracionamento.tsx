@@ -2,107 +2,110 @@ import "server-only"
 import { connection } from "next/server"
 import { db } from "@/db"
 import { contratacoes, orgaos, unidadesOrgao } from "@/db/schema"
-import { eq, sql, and, isNotNull, gt } from "drizzle-orm"
+import { eq, sql, and, isNotNull } from "drizzle-orm"
 import { formatarMoeda } from "@/lib/format"
-import { AlertTriangle, CheckCircle, AlertCircle } from "lucide-react"
+import { agruparPorObjeto } from "@/lib/fracionamento"
+import { AlertTriangle, AlertCircle, Info } from "lucide-react"
 import { BotaoAjuda } from "@/components/tour/BotaoAjuda"
 
-// Tetos art. 75 — Decreto 11.871/2023
-// Verificar no decreto vigente do ano corrente antes de usar em produção
-const TETO_BENS_SERVICOS  = 57_271.73   // art. 75, I  — bens e serviços em geral
-const TETO_OBRAS          = 114_543.46  // art. 75, II — obras e serviços de engenharia
+// Tetos art. 75 — Decreto 11.871/2023. Verificar o decreto vigente do ano.
+const TETO_BENS_SERVICOS = 57_271.73   // art. 75, I  — bens e serviços em geral
+const TETO_OBRAS         = 114_543.46  // art. 75, II — obras e engenharia
 
-type Alerta = "critico" | "atencao" | "aviso" | "ok"
+// Calibrado contra as 113 dispensas de 2026 da Prefeitura de Franca: abaixo
+// disso chamadas públicas distintas se fundem; acima, variações de redação do
+// mesmo objeto se separam.
+const LIMIAR_SIMILARIDADE = 0.5
+// Uma dispensa isolada acima do teto é outro problema, não fracionamento.
+const MIN_DISPENSAS = 2
+const MAX_LINHAS = 1_500
+
+type Alerta = "critico" | "atencao" | "aviso"
 
 function classificar(pct: number): Alerta {
-  if (pct >= 100) return "critico"
-  if (pct >= 80)  return "atencao"
-  if (pct >= 60)  return "aviso"
-  return "ok"
+  if (pct >= 300) return "critico"
+  if (pct >= 150) return "atencao"
+  return "aviso"
+}
+
+const ESTILO: Record<Alerta, { cor: string; bg: string }> = {
+  critico: { cor: "#B91C1C", bg: "rgb(220 38 38 / 0.08)" },
+  atencao: { cor: "#B45309", bg: "rgb(245 158 11 / 0.10)" },
+  aviso:   { cor: "#1D4ED8", bg: "rgb(59 130 246 / 0.08)" },
 }
 
 export async function RadarFracionamento() {
-  // O ano corrente muda entre renders; sem isso o Next tenta prerenderizar e falha
   await connection()
   const anoAtual = new Date().getFullYear()
 
-  // Soma dispensas por órgão no ano corrente (data_publicacao_pncp no fuso de Brasília)
   const rows = await db
     .select({
-      orgaoId:       contratacoes.orgaoId,
-      razaoSocial:   orgaos.razaoSocial,
-      cnpj:          orgaos.cnpj,
-      esfera:        orgaos.esfera,
-      uf:            unidadesOrgao.ufSigla,
-      totalDispensas: sql<string>`count(*)`,
-      totalValor:    sql<string>`sum(${contratacoes.valorEstimado}::numeric)`,
+      orgaoId:     contratacoes.orgaoId,
+      razaoSocial: orgaos.razaoSocial,
+      uf:          unidadesOrgao.ufSigla,
+      objeto:      contratacoes.objeto,
+      valor:       sql<string>`coalesce(${contratacoes.valorEstimado}::numeric, 0)`,
     })
     .from(contratacoes)
-    .innerJoin(orgaos,        eq(contratacoes.orgaoId,        orgaos.id))
-    .leftJoin(unidadesOrgao,  eq(contratacoes.unidadeOrgaoId, unidadesOrgao.id))
+    .innerJoin(orgaos, eq(contratacoes.orgaoId, orgaos.id))
+    .leftJoin(unidadesOrgao, eq(contratacoes.unidadeOrgaoId, unidadesOrgao.id))
     .where(
       and(
-        eq(contratacoes.modalidadeId, 8), // Dispensa de Licitação
+        eq(contratacoes.modalidadeId, 8),
+        isNotNull(contratacoes.objeto),
         isNotNull(contratacoes.dataPublicacaoPncp),
-        gt(
-          sql`extract(year from ${contratacoes.dataPublicacaoPncp} at time zone 'America/Sao_Paulo')`,
-          sql`${anoAtual - 1}`,
-        ),
         sql`extract(year from ${contratacoes.dataPublicacaoPncp} at time zone 'America/Sao_Paulo') = ${anoAtual}`,
-      )
+      ),
     )
-    .groupBy(contratacoes.orgaoId, orgaos.razaoSocial, orgaos.cnpj, orgaos.esfera, unidadesOrgao.ufSigla)
-    .orderBy(sql`sum(${contratacoes.valorEstimado}::numeric) desc nulls last`)
-    .limit(20)
+    .limit(MAX_LINHAS)
 
-  const itens = rows
-    .map((r) => {
-      const valor = parseFloat(r.totalValor ?? "0")
-      const total = parseInt(r.totalDispensas ?? "0", 10)
-      const pct   = (valor / TETO_BENS_SERVICOS) * 100
-      return { ...r, valor, total, pct, alerta: classificar(pct) }
-    })
-    .filter((r) => r.pct >= 30) // só mostra quem já consumiu ≥ 30% do teto
-
-  const ESFERA: Record<string, string> = { F: "Federal", E: "Estadual", M: "Municipal", D: "Distrital" }
-
-  const ALERTA_STYLE: Record<Alerta, { cor: string; bg: string; icon: React.ReactNode }> = {
-    critico: {
-      cor: "#B91C1C",
-      bg:  "rgb(220 38 38 / 0.08)",
-      icon: <AlertTriangle size={13} style={{ color: "#B91C1C" }} />,
-    },
-    atencao: {
-      cor: "#B45309",
-      bg:  "rgb(245 158 11 / 0.10)",
-      icon: <AlertCircle size={13} style={{ color: "#B45309" }} />,
-    },
-    aviso: {
-      cor: "#1D4ED8",
-      bg:  "rgb(59 130 246 / 0.08)",
-      icon: <AlertCircle size={13} style={{ color: "#1D4ED8" }} />,
-    },
-    ok: {
-      cor: "#15803D",
-      bg:  "rgb(34 197 94 / 0.08)",
-      icon: <CheckCircle size={13} style={{ color: "#15803D" }} />,
-    },
+  // Agrupa por órgão: o teto é aferido dentro de cada órgão, não entre eles
+  const porOrgao = new Map<number, typeof rows>()
+  for (const r of rows) {
+    if (r.orgaoId == null) continue
+    const atual = porOrgao.get(r.orgaoId)
+    if (atual) atual.push(r)
+    else porOrgao.set(r.orgaoId, [r])
   }
 
-  if (itens.length === 0) {
+  const grupos = []
+  for (const itens of porOrgao.values()) {
+    for (const cluster of agruparPorObjeto(itens, (i) => i.objeto ?? "", LIMIAR_SIMILARIDADE)) {
+      if (cluster.length < MIN_DISPENSAS) continue
+      const soma = cluster.reduce((a, c) => a + parseFloat(c.valor), 0)
+      if (soma < TETO_BENS_SERVICOS) continue
+      grupos.push({
+        razaoSocial: cluster[0].razaoSocial,
+        uf:          cluster[0].uf,
+        objeto:      cluster[0].objeto ?? "Não informado",
+        n:           cluster.length,
+        soma,
+        pct:         (soma / TETO_BENS_SERVICOS) * 100,
+      })
+    }
+  }
+  grupos.sort((a, b) => b.soma - a.soma)
+
+  const cabecalho = (
+    <div className="flex items-center justify-between gap-2 mb-1">
+      <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
+        Dispensas com objeto recorrente — {anoAtual}
+      </h2>
+      <BotaoAjuda tourId="fracionamento" rotulo="Como funciona o Radar de Fracionamento" />
+    </div>
+  )
+
+  if (rows.length === 0) {
     return (
       <section id="tour-radar-fracionamento" className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--border)" }}>
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
-            Radar de Fracionamento — Dispensas {anoAtual}
-          </h2>
-          <BotaoAjuda tourId="fracionamento" rotulo="Como funciona o Radar de Fracionamento" />
-        </div>
+        {cabecalho}
         <p id="tour-radar-explicacao" className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
-          Acúmulo de dispensas (art. 75) por órgão no ano · Teto bens/serviços: {formatarMoeda(TETO_BENS_SERVICOS)} · Decreto 11.871/2023
+          Agrupa dispensas de objeto semelhante dentro de cada órgão e soma os valores.
         </p>
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Nenhum órgão consumiu mais de 30% do teto ainda este ano.
+          Nenhuma dispensa de {anoAtual} no banco. Rode{" "}
+          <code className="font-mono text-xs">npm run sync:dispensas</code> para carregar o
+          histórico dos órgãos monitorados.
         </p>
       </section>
     )
@@ -110,66 +113,75 @@ export async function RadarFracionamento() {
 
   return (
     <section id="tour-radar-fracionamento" className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--border)" }}>
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
-          Radar de Fracionamento — Dispensas {anoAtual}
-        </h2>
-        <BotaoAjuda tourId="fracionamento" rotulo="Como funciona o Radar de Fracionamento" />
-      </div>
+      {cabecalho}
       <p id="tour-radar-explicacao" className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
-        Acúmulo de dispensas (art. 75) por órgão · Teto bens/serviços: {formatarMoeda(TETO_BENS_SERVICOS)} ·{" "}
-        obras: {formatarMoeda(TETO_OBRAS)} · Decreto 11.871/2023 — verificar decreto vigente
+        Dispensas de objeto semelhante somadas por órgão, comparadas ao teto do art. 75:{" "}
+        {formatarMoeda(TETO_BENS_SERVICOS)} para bens/serviços e {formatarMoeda(TETO_OBRAS)} para
+        obras (Decreto 11.871/2023) · {rows.length} dispensa{rows.length !== 1 ? "s" : ""} analisada
+        {rows.length !== 1 ? "s" : ""}
       </p>
 
-      <div id="tour-radar-lista" className="flex flex-col gap-2">
-        {itens.map((r, idx) => {
-          const s = ALERTA_STYLE[r.alerta]
-          const pctClamped = Math.min(r.pct, 100)
-          return (
-            <div
-              key={r.orgaoId}
-              id={idx === 0 ? "tour-radar-item" : undefined}
-              className="rounded-xl p-3"
-              style={{ background: s.bg, border: `1px solid ${s.cor}22` }}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  {s.icon}
-                  <span className="font-medium text-sm truncate" style={{ color: "var(--navy)" }}>
-                    {r.razaoSocial}
+      {grupos.length === 0 ? (
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Nenhum conjunto de dispensas de objeto semelhante ultrapassou o teto este ano.
+        </p>
+      ) : (
+        <div id="tour-radar-lista" className="flex flex-col gap-2">
+          {grupos.map((g, idx) => {
+            const s = ESTILO[classificar(g.pct)]
+            return (
+              <div
+                key={idx}
+                id={idx === 0 ? "tour-radar-item" : undefined}
+                className="rounded-xl p-3"
+                style={{ background: s.bg, border: `1px solid ${s.cor}22` }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {g.pct >= 300
+                      ? <AlertTriangle size={13} style={{ color: s.cor }} />
+                      : <AlertCircle size={13} style={{ color: s.cor }} />}
+                    <span className="font-medium text-sm truncate" style={{ color: "var(--navy)" }}>
+                      {g.razaoSocial}
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: s.cor }}>
+                    {g.pct.toFixed(0)}% do teto
                   </span>
                 </div>
-                <span className="shrink-0 text-xs font-semibold tabular-nums" style={{ color: s.cor }}>
-                  {r.pct.toFixed(0)}%
-                </span>
-              </div>
 
-              <div className="mt-1.5 h-2 rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${pctClamped}%`, background: s.cor }}
-                />
-              </div>
+                <p className="mt-1 text-xs leading-snug line-clamp-2" style={{ color: "var(--text-muted)" }}>
+                  {g.objeto}
+                </p>
 
-              <div className="flex flex-wrap gap-x-4 mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
-                <span>
-                  {r.total} dispensa{r.total !== 1 ? "s" : ""} ·{" "}
-                  <span className="font-medium" style={{ color: "var(--navy)" }}>
-                    {formatarMoeda(r.valor)}
-                  </span>{" "}
-                  de {formatarMoeda(TETO_BENS_SERVICOS)}
-                </span>
-                <span>{ESFERA[r.esfera ?? ""] ?? r.esfera ?? "—"}{r.uf ? ` · ${r.uf}` : ""}</span>
+                <div className="flex flex-wrap gap-x-4 mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span>
+                    {g.n} dispensas de objeto semelhante ·{" "}
+                    <span className="font-medium" style={{ color: "var(--navy)" }}>
+                      {formatarMoeda(g.soma)}
+                    </span>{" "}
+                    de {formatarMoeda(TETO_BENS_SERVICOS)}
+                  </span>
+                  {g.uf && <span>{g.uf}</span>}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
+      )}
+
+      <div
+        className="mt-3 flex items-start gap-1.5 rounded-xl p-2.5 text-xs"
+        style={{ background: "var(--surface)", color: "var(--text-muted)" }}
+      >
+        <Info size={13} className="shrink-0 mt-0.5" />
+        <span>
+          Recorrência é indício a verificar, não irregularidade. Há hipóteses legais que explicam
+          objeto repetido — chamada pública da agricultura familiar (PNAE), emergência e dispensas
+          de naturezas distintas agrupadas por semelhança de texto. Confira o objeto de cada
+          dispensa no PNCP antes de concluir.
+        </span>
       </div>
-
-      <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
-        ⚠ Fracionamento suspeito quando o mesmo objeto é dividido em várias dispensas para fugir do pregão.
-        Valor total usa o teto de bens/serviços; obras têm teto maior. Verifique o objeto de cada dispensa.
-      </p>
     </section>
   )
 }

@@ -14,7 +14,8 @@
     "db:seed": "dotenv run -f .env.local -- tsx src/db/seed.ts",
     "db:studio": "dotenv run -f .env.local -- drizzle-kit studio",
     "db:reset": "npm run db:migrate && npm run db:seed",
-    "sync:pncp": "dotenv run -f .env.local -- tsx src/scripts/sync-pncp.ts"
+    "sync:pncp": "dotenv run -f .env.local -- tsx src/scripts/sync-pncp.ts",
+    "sync:dispensas": "dotenv run -f .env.local -- tsx src/scripts/sync-dispensas.ts"
   },
   "dependencies": {
     "@svg-maps/brazil": "^2.0.0",

@@ -62,6 +62,23 @@ Cabeçalhos: `access-control-allow-origin: *` (o navegador pode chamar direto) e
 1: 8 · 4: 240 · 5: 11 · 6 (Pregão Eletrônico): 1524 · 7: 27 · 8 (Dispensa): 2643 · 9 (Inexigibilidade): 990 · demais: 0.
 `/proposta` com `dataFinal=20261231`: 28.919 registros.
 
+### Volume de dispensas por janela anual (verificado em 2026-10-31)
+
+`/publicacao` com `codigoModalidadeContratacao=8`, `dataInicial=20260101&dataFinal=20261031`:
+
+| Recorte | `totalRegistros` | Páginas (50/pág) |
+|---|---|---|
+| Brasil | 587.158 | 58.716 |
+| `uf=SP` | 159.954 | 15.996 |
+| `cnpj=47970769000104` (Franca) | 113 | 3 |
+
+Carga nacional ou por UF não cabe no plano gratuito do Neon. O sync de dispensas
+(`npm run sync:dispensas`) usa portanto o parâmetro opcional `cnpj`, recortando
+pelos órgãos monitorados — ~113 registros por órgão/ano.
+
+Latência medida: ~6,7 s na primeira chamada de uma URL, ~0,1 s nas repetições
+(o PNCP mantém cache por URL). `/v1/contratos` chegou a 35,6 s a frio.
+
 ## Campos do registro (`RecuperarCompraPublicacaoDTO`)
 
 `numeroControlePNCP` (id externo estável, ex. `88201298000149-1-001203/2026`), `anoCompra`, `sequencialCompra`, `numeroCompra`, `processo`, `objetoCompra`, `informacaoComplementar`, `orgaoEntidade{cnpj,razaoSocial,esferaId,poderId}`, `unidadeOrgao{ufSigla,municipioNome,codigoIbge,codigoUnidade,nomeUnidade}`, `modalidadeId/Nome`, `modoDisputaId/Nome`, `tipoInstrumentoConvocatorioCodigo/Nome`, `amparoLegal`, `srp`, `valorTotalEstimado`, `valorTotalHomologado`, `indicadorOrcamentoSigiloso`, `situacaoCompraId/Nome`, `dataPublicacaoPncp`, `dataAberturaProposta`, `dataEncerramentoProposta`, `dataAtualizacao`, `dataAtualizacaoGlobal`, `linkSistemaOrigem`, `linkProcessoEletronico`, `existeResultado`, `fontesOrcamentarias`, `orgaoSubRogado`, `unidadeSubRogada`.

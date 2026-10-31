@@ -330,6 +330,113 @@ async function upsertContratacao(
   return { contratacaoId, mudou }
 }
 
+// ─── Sync de dispensas por órgão ──────────────────────────────────────────── //
+// /v1/contratacoes/proposta só devolve o que está com proposta aberta, então o
+// histórico de dispensas encerradas nunca entrava no banco. /publicacao exige
+// codigoModalidadeContratacao, o que aqui é conveniente: queremos só a 8.
+// Recorte por CNPJ porque o volume nacional (587 mil em 2026) não cabe no plano
+// gratuito, enquanto um órgão rende ~113 registros no ano.
+
+const MODALIDADE_DISPENSA = 8
+
+export interface SyncDispensasOpts {
+  db:       SyncOpts["db"]
+  cnpjs:    string[]
+  ano?:     number
+  verbose?: boolean
+}
+
+export async function syncDispensasOrgaos(opts: SyncDispensasOpts): Promise<SyncResult> {
+  const { db, cnpjs, ano = new Date().getFullYear(), verbose = false } = opts
+  const inicio = Date.now()
+  const result: SyncResult = { inseridos: 0, atualizados: 0, iguais: 0, erros: 0, paginas: 0, duracaoMs: 0 }
+  const log = (...args: unknown[]) => verbose && console.log(...args)
+
+  const [fonte] = await db.select().from(fontes).where(eq(fontes.slug, "pncp"))
+  if (!fonte) throw new Error("Fonte 'pncp' não encontrada. Rode db:seed primeiro.")
+
+  const [exec] = await db
+    .insert(syncExecucoes)
+    .values({ fonteId: fonte.id, status: "executando" })
+    .returning({ id: syncExecucoes.id })
+
+  const dataInicial = `${ano}0101`
+  const dataFinal   = `${ano}1231`
+
+  try {
+    for (const cnpj of cnpjs) {
+      let pagina = 1
+      let totalPaginas = 1
+      log(`\n▶ Dispensas ${ano} — CNPJ ${cnpj}`)
+
+      do {
+        const url = `${BASE_URL}/v1/contratacoes/publicacao`
+          + `?dataInicial=${dataInicial}&dataFinal=${dataFinal}`
+          + `&codigoModalidadeContratacao=${MODALIDADE_DISPENSA}`
+          + `&cnpj=${cnpj}&pagina=${pagina}&tamanhoPagina=${PAGE_SIZE}`
+
+        let paginado: PncpPaginado
+        try {
+          paginado = await fetchComRetry(url)
+        } catch (err) {
+          await db.insert(syncErros).values({
+            fonteId: fonte.id, execucaoId: exec.id, endpoint: url,
+            mensagem: (err as Error).message,
+          })
+          result.erros++
+          break
+        }
+
+        totalPaginas = paginado.totalPaginas
+        result.paginas++
+        log(`  Pág ${pagina}/${totalPaginas} — ${(paginado.data ?? []).length} itens`)
+
+        for (const item of paginado.data ?? []) {
+          try {
+            const orgaoId   = await upsertOrgao(db, item)
+            const unidadeId = await upsertUnidade(db, orgaoId, item)
+            const { mudou } = await upsertContratacao(db, fonte.id, item, orgaoId, unidadeId)
+            if (mudou) result.inseridos++; else result.iguais++
+          } catch (err) {
+            result.erros++
+            await db.insert(syncErros).values({
+              fonteId: fonte.id, execucaoId: exec.id, endpoint: url,
+              mensagem: `item ${item.numeroControlePNCP}: ${(err as Error).message}`,
+            })
+          }
+        }
+
+        pagina++
+        if (pagina <= totalPaginas) await new Promise(res => setTimeout(res, DELAY_MS))
+      } while (pagina <= totalPaginas)
+    }
+
+    result.duracaoMs = Date.now() - inicio
+    await db
+      .update(syncExecucoes)
+      .set({
+        status: "concluido", concluidoEm: new Date(),
+        registrosLidos: result.inseridos + result.iguais,
+        registrosGravados: result.inseridos,
+        erros: result.erros,
+        detalhes: { ...result, modo: "dispensas", cnpjs, ano } as unknown as Record<string, unknown>,
+      })
+      .where(eq(syncExecucoes.id, exec.id))
+
+    log(`\n✅ ${result.inseridos} gravados, ${result.iguais} iguais, ${result.erros} erros, ${result.paginas} páginas, ${(result.duracaoMs / 1000).toFixed(1)}s`)
+  } catch (err) {
+    result.duracaoMs = Date.now() - inicio
+    await db
+      .update(syncExecucoes)
+      .set({ status: "falha", concluidoEm: new Date(), erros: result.erros + 1,
+             detalhes: { erro: (err as Error).message } as unknown as Record<string, unknown> })
+      .where(eq(syncExecucoes.id, exec.id))
+    throw err
+  }
+
+  return result
+}
+
 // ─── Sync principal ───────────────────────────────────────────────────────── //
 
 export async function syncPncp(opts: SyncOpts): Promise<SyncResult> {
