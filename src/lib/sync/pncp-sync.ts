@@ -122,7 +122,23 @@ const disjuntor = new DisjuntorPncp()
 
 // ─── Retry com backoff + disjuntor ───────────────────────────────────────── //
 
-async function fetchComRetry(url: string, tentativas = 3): Promise<PncpPaginado> {
+// Backoff quando o PNCP limita a taxa. O 429 precisa de espera bem maior que
+// um 5xx: com 1–4 s o servidor continuava recusando e o sync registrava erro.
+const ESPERA_429_MS = 5_000
+const ESPERA_5XX_MS = 1_000
+const ESPERA_MAX_MS = 60_000
+
+function esperaBackoff(r: Response, tentativa: number): number {
+  // PNCP envia Retry-After em segundos quando aplica rate limit
+  const retryAfter = Number(r.headers.get("retry-after"))
+  const base = Number.isFinite(retryAfter) && retryAfter > 0
+    ? retryAfter * 1_000
+    : (r.status === 429 ? ESPERA_429_MS : ESPERA_5XX_MS) * 2 ** tentativa
+  // jitter evita que requisições paralelas voltem todas no mesmo instante
+  return Math.min(base + Math.random() * 500, ESPERA_MAX_MS)
+}
+
+async function fetchComRetry(url: string, tentativas = 4): Promise<PncpPaginado> {
   if (!disjuntor.podeRequisitar()) {
     throw new Error(`Disjuntor PNCP ${disjuntor.statusTexto} — aguarde o cooldown`)
   }
@@ -132,8 +148,9 @@ async function fetchComRetry(url: string, tentativas = 3): Promise<PncpPaginado>
     try {
       const r = await fetch(url, { signal: AbortSignal.timeout(15_000) })
       if (r.status === 429 || r.status >= 500) {
-        const espera = 2 ** i * 1_000
-        await new Promise(res => setTimeout(res, espera))
+        if (i < tentativas - 1) {
+          await new Promise(res => setTimeout(res, esperaBackoff(r, i)))
+        }
         ultimo = new Error(`HTTP ${r.status}`)
         continue
       }

@@ -5,6 +5,7 @@ import "./globals.css"
 import { TopNav } from "@/components/layout/TopNav"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { UserMenuServer } from "@/components/layout/UserMenuServer"
+import { TourRunner } from "@/components/tour/TourRunner"
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] })
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] })
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         style={{ background: "var(--canvas)" }}
       >
         <TopNav userMenu={<Suspense><UserMenuServer /></Suspense>} />
+        <Suspense><TourRunner /></Suspense>
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main

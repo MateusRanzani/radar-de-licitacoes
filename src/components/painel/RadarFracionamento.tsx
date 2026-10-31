@@ -1,9 +1,11 @@
 import "server-only"
+import { connection } from "next/server"
 import { db } from "@/db"
 import { contratacoes, orgaos, unidadesOrgao } from "@/db/schema"
 import { eq, sql, and, isNotNull, gt } from "drizzle-orm"
 import { formatarMoeda } from "@/lib/format"
 import { AlertTriangle, CheckCircle, AlertCircle } from "lucide-react"
+import { BotaoAjuda } from "@/components/tour/BotaoAjuda"
 
 // Tetos art. 75 — Decreto 11.871/2023
 // Verificar no decreto vigente do ano corrente antes de usar em produção
@@ -20,6 +22,8 @@ function classificar(pct: number): Alerta {
 }
 
 export async function RadarFracionamento() {
+  // O ano corrente muda entre renders; sem isso o Next tenta prerenderizar e falha
+  await connection()
   const anoAtual = new Date().getFullYear()
 
   // Soma dispensas por órgão no ano corrente (data_publicacao_pncp no fuso de Brasília)
@@ -87,11 +91,14 @@ export async function RadarFracionamento() {
 
   if (itens.length === 0) {
     return (
-      <section className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--border)" }}>
-        <h2 className="font-semibold text-sm mb-1" style={{ color: "var(--navy)" }}>
-          Radar de Fracionamento — Dispensas {anoAtual}
-        </h2>
-        <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+      <section id="tour-radar-fracionamento" className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--border)" }}>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
+            Radar de Fracionamento — Dispensas {anoAtual}
+          </h2>
+          <BotaoAjuda tourId="fracionamento" rotulo="Como funciona o Radar de Fracionamento" />
+        </div>
+        <p id="tour-radar-explicacao" className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
           Acúmulo de dispensas (art. 75) por órgão no ano · Teto bens/serviços: {formatarMoeda(TETO_BENS_SERVICOS)} · Decreto 11.871/2023
         </p>
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -102,22 +109,26 @@ export async function RadarFracionamento() {
   }
 
   return (
-    <section className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--border)" }}>
-      <h2 className="font-semibold text-sm mb-1" style={{ color: "var(--navy)" }}>
-        Radar de Fracionamento — Dispensas {anoAtual}
-      </h2>
-      <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+    <section id="tour-radar-fracionamento" className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--border)" }}>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
+          Radar de Fracionamento — Dispensas {anoAtual}
+        </h2>
+        <BotaoAjuda tourId="fracionamento" rotulo="Como funciona o Radar de Fracionamento" />
+      </div>
+      <p id="tour-radar-explicacao" className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
         Acúmulo de dispensas (art. 75) por órgão · Teto bens/serviços: {formatarMoeda(TETO_BENS_SERVICOS)} ·{" "}
         obras: {formatarMoeda(TETO_OBRAS)} · Decreto 11.871/2023 — verificar decreto vigente
       </p>
 
-      <div className="flex flex-col gap-2">
-        {itens.map((r) => {
+      <div id="tour-radar-lista" className="flex flex-col gap-2">
+        {itens.map((r, idx) => {
           const s = ALERTA_STYLE[r.alerta]
           const pctClamped = Math.min(r.pct, 100)
           return (
             <div
               key={r.orgaoId}
+              id={idx === 0 ? "tour-radar-item" : undefined}
               className="rounded-xl p-3"
               style={{ background: s.bg, border: `1px solid ${s.cor}22` }}
             >

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { connection } from "next/server"
+import { Suspense } from "react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { auth } from "@/auth"
@@ -20,7 +21,33 @@ import { PesquisasSalvas } from "@/components/acompanhamento/PesquisasSalvas"
 export const metadata: Metadata = { title: "Acompanhamento" }
 
 
-export default async function AcompanhamentoPage() {
+export default function AcompanhamentoPage() {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-6 w-full">
+      <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--navy)" }}>
+        Acompanhamento
+      </h1>
+      <Suspense fallback={<AcompanhamentoCarregando />}>
+        <AcompanhamentoDados />
+      </Suspense>
+    </div>
+  )
+}
+
+function AcompanhamentoCarregando() {
+  return (
+    <div className="animate-pulse" aria-busy="true" aria-label="Carregando acompanhamento">
+      <div className="h-4 w-56 rounded mt-1 mb-6" style={{ background: "var(--border)" }} />
+      <div className="flex flex-col gap-4">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-40 rounded-2xl" style={{ background: "var(--border)" }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+async function AcompanhamentoDados() {
   await connection()
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
@@ -76,15 +103,10 @@ export default async function AcompanhamentoPage() {
   )
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 w-full">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--navy)" }}>
-          Acompanhamento
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          {session.user.name} · {favoritosComDados.length} licitaç{favoritosComDados.length !== 1 ? "ões" : "ão"} salv{favoritosComDados.length !== 1 ? "as" : "a"}
-        </p>
-      </div>
+    <>
+      <p className="text-sm mt-1 mb-6" style={{ color: "var(--text-muted)" }}>
+        {session.user.name} · {favoritosComDados.length} licitaç{favoritosComDados.length !== 1 ? "ões" : "ão"} salv{favoritosComDados.length !== 1 ? "as" : "a"}
+      </p>
 
       {favoritosComDados.length === 0 ? (
         <div
@@ -204,6 +226,6 @@ export default async function AcompanhamentoPage() {
       <div className="mt-8">
         <PesquisasSalvas pesquisas={pesquisas as Parameters<typeof PesquisasSalvas>[0]["pesquisas"]} />
       </div>
-    </div>
+    </>
   )
 }

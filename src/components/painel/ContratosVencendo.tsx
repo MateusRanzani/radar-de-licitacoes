@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react"
 import { AlertTriangle, Calendar, RefreshCw, Settings, Building2, ChevronDown, ChevronUp } from "lucide-react"
 import Link from "next/link"
+import { BotaoAjuda } from "@/components/tour/BotaoAjuda"
 
 interface Contrato {
   numeroControlePNCP: string | null
@@ -27,6 +28,7 @@ export function ContratosVencendo({ cnpjOrgao, nomeOrgao }: Props) {
   const [dias, setDias] = useState(90)
   const [contratos, setContratos] = useState<Contrato[]>([])
   const [limitado, setLimitado] = useState(false)
+  const [cobertura, setCobertura] = useState<{ lidas: number; total: number } | null>(null)
   const [consultadoEm, setConsultadoEm] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [expandidos, setExpandidos] = useState<Set<number>>(new Set())
@@ -36,15 +38,22 @@ export function ContratosVencendo({ cnpjOrgao, nomeOrgao }: Props) {
     setFase("carregando")
     setErro(null)
     try {
-      const r = await fetch(`/api/pncp/contratos-vencendo?cnpj=${cnpjOrgao}&dias=${d}`)
+      // A rota tem orçamento de 45 s; 60 s aqui cobre a resposta sem pendurar a UI
+      const r = await fetch(`/api/pncp/contratos-vencendo?cnpj=${cnpjOrgao}&dias=${d}`, {
+        signal: AbortSignal.timeout(60_000),
+      })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`)
       setContratos(j.contratos)
       setLimitado(j.limitado)
+      setCobertura({ lidas: j.paginasConsultadas, total: j.totalPaginas })
       setConsultadoEm(j.consultadoEm)
       setFase("ok")
     } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error && e.name === "TimeoutError"
+        ? "O PNCP demorou demais para responder. Tente novamente — a consulta seguinte costuma ser rápida."
+        : e instanceof Error ? e.message : String(e)
+      setErro(msg)
       setFase("erro")
     }
   }, [cnpjOrgao])
@@ -61,12 +70,16 @@ export function ContratosVencendo({ cnpjOrgao, nomeOrgao }: Props) {
   if (!cnpjOrgao) {
     return (
       <section
+        id="tour-contratos-vencendo"
         className="rounded-2xl border bg-white p-5"
         style={{ borderColor: "var(--border)" }}
       >
-        <h2 className="font-semibold text-sm mb-3" style={{ color: "var(--navy)" }}>
-          Contratos vencendo
-        </h2>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
+            Contratos vencendo
+          </h2>
+          <BotaoAjuda tourId="contratos-vencendo" rotulo="Como monitorar contratos vencendo" />
+        </div>
         <div className="flex flex-col items-center gap-2 py-6 text-center">
           <Building2 size={24} style={{ color: "var(--text-muted)" }} />
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -87,15 +100,19 @@ export function ContratosVencendo({ cnpjOrgao, nomeOrgao }: Props) {
 
   return (
     <section
+      id="tour-contratos-vencendo"
       className="rounded-2xl border bg-white p-5 space-y-4"
       style={{ borderColor: "var(--border)" }}
     >
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
-            Contratos vencendo
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
+              Contratos vencendo
+            </h2>
+            <BotaoAjuda tourId="contratos-vencendo" rotulo="Como monitorar contratos vencendo" />
+          </div>
           {nomeOrgao && (
             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{nomeOrgao}</p>
           )}
@@ -151,7 +168,7 @@ export function ContratosVencendo({ cnpjOrgao, nomeOrgao }: Props) {
             <div key={i} className="h-16 rounded-xl animate-pulse" style={{ background: "var(--border)" }} />
           ))}
           <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
-            Consultando PNCP…
+            Consultando PNCP… a primeira consulta do dia pode levar até 1 minuto; as seguintes são rápidas.
           </p>
         </div>
       )}
@@ -250,7 +267,9 @@ export function ContratosVencendo({ cnpjOrgao, nomeOrgao }: Props) {
               style={{ color: "#92400E" }}
             >
               <AlertTriangle size={12} />
-              Resultado limitado — consulte o PNCP para lista completa.
+              {cobertura
+                ? `Parcial: ${cobertura.lidas} de ${cobertura.total} páginas lidas. Clique em Atualizar para completar.`
+                : "Resultado parcial — clique em Atualizar para completar."}
             </span>
           )}
           {consultadoEm && (

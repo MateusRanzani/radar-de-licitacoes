@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import type { Metadata } from "next"
 import { connection } from "next/server"
+import { Suspense } from "react"
 import {
   buscarContratacao, buscarItens, buscarArquivos,
   parseContratacaoId,
@@ -35,7 +36,29 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function DetalheLicitacaoPage({ params }: Props) {
+export default function DetalheLicitacaoPage({ params }: Props) {
+  return (
+    <Suspense fallback={<DetalheCarregando />}>
+      <DetalheDados params={params} />
+    </Suspense>
+  )
+}
+
+function DetalheCarregando() {
+  return (
+    <div
+      className="mx-auto max-w-4xl px-4 py-6 w-full animate-pulse"
+      aria-busy="true"
+      aria-label="Carregando licitação"
+    >
+      <div className="h-4 w-24 rounded mb-5" style={{ background: "var(--border)" }} />
+      <div className="h-32 rounded-2xl mb-4" style={{ background: "var(--border)" }} />
+      <div className="h-64 rounded-2xl" style={{ background: "var(--border)" }} />
+    </div>
+  )
+}
+
+async function DetalheDados({ params }: Props) {
   await connection() // datas relativas → rendering dinâmico
   const { id } = await params
   const parsed = parseContratacaoId(id)

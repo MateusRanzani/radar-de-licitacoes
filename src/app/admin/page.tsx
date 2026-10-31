@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { connection } from "next/server"
+import { Suspense } from "react"
 import { Settings, CheckCircle2, XCircle, Loader2, Clock, Database } from "lucide-react"
 import { db } from "@/db"
 import { syncExecucoes, syncErros, fontes, contratacoes } from "@/db/schema"
@@ -7,7 +8,44 @@ import { desc, eq, count } from "drizzle-orm"
 
 export const metadata: Metadata = { title: "Admin — LicitaRadar" }
 
-export default async function AdminPage() {
+export default function AdminPage() {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 space-y-8">
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-xl"
+          style={{ background: "rgb(255 90 31 / 0.10)", color: "var(--brand)" }}
+        >
+          <Settings size={20} />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold" style={{ color: "var(--navy)" }}>Admin</h1>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Monitoramento de sync e banco de dados
+          </p>
+        </div>
+      </div>
+      <Suspense fallback={<AdminCarregando />}>
+        <AdminDados />
+      </Suspense>
+    </div>
+  )
+}
+
+function AdminCarregando() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[0,1,2,3].map(i => (
+          <div key={i} className="h-20 rounded-2xl" style={{ background: "var(--border)" }} />
+        ))}
+      </div>
+      <div className="h-48 rounded-2xl" style={{ background: "var(--border)" }} />
+    </div>
+  )
+}
+
+async function AdminDados() {
   await connection()
   const [execucoes, totais, errosRecentes] = await Promise.all([
     db
@@ -45,23 +83,7 @@ export default async function AdminPage() {
   const totalContratacoes = totais[0]?.total ?? 0
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 space-y-8">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl"
-          style={{ background: "rgb(255 90 31 / 0.10)", color: "var(--brand)" }}
-        >
-          <Settings size={20} />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold" style={{ color: "var(--navy)" }}>Admin</h1>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Monitoramento de sync e banco de dados
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard

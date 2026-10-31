@@ -6,6 +6,7 @@ import type { PesquisaState } from "@/app/actions/pesquisas"
 import { Search, Plus, Trash2, Bell, BellOff, ChevronDown, ChevronUp } from "lucide-react"
 import { useState } from "react"
 import { UFS } from "@/lib/constants"
+import { BotaoAjuda } from "@/components/tour/BotaoAjuda"
 
 interface PesquisaSalva {
   id: bigint
@@ -45,15 +46,17 @@ export function PesquisasSalvas({ pesquisas }: { pesquisas: PesquisaSalva[] }) {
   }
 
   return (
-    <section className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--border)" }}>
+    <section id="tour-pesquisas-salvas" className="rounded-2xl border bg-white p-5" style={{ borderColor: "var(--border)" }}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Search size={15} style={{ color: "var(--brand)" }} />
           <h2 className="font-semibold text-sm" style={{ color: "var(--navy)" }}>
             Pesquisas salvas com alerta
           </h2>
+          <BotaoAjuda tourId="alertas" rotulo="Como criar alertas por palavra-chave" />
         </div>
         <button
+          id="tour-nova-pesquisa-btn"
           onClick={() => setMostrarForm((v) => !v)}
           className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
           style={{ background: "var(--brand)", color: "var(--navy)" }}
@@ -67,6 +70,7 @@ export function PesquisasSalvas({ pesquisas }: { pesquisas: PesquisaSalva[] }) {
       {/* Formulário */}
       {mostrarForm && (
         <form
+          id="tour-pesquisa-form"
           action={action}
           className="mb-4 rounded-xl border p-4 space-y-3"
           style={{ borderColor: "var(--border)", background: "var(--surface)" }}
@@ -77,6 +81,7 @@ export function PesquisasSalvas({ pesquisas }: { pesquisas: PesquisaSalva[] }) {
                 Nome da pesquisa *
               </label>
               <input
+                id="tour-campo-nome"
                 name="nome"
                 required
                 placeholder="Ex: TI em SP"
@@ -89,6 +94,7 @@ export function PesquisasSalvas({ pesquisas }: { pesquisas: PesquisaSalva[] }) {
                 Palavra-chave no objeto
               </label>
               <input
+                id="tour-campo-q"
                 name="q"
                 placeholder="Ex: desenvolvimento de software"
                 className="w-full text-sm border rounded-lg px-3 py-2 outline-none focus:ring-1"
